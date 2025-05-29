@@ -1,0 +1,39 @@
+package com.example
+
+case class Vector2d(x: Double, y: Double) {
+
+  def +(other: Vector2d): Vector2d = Vector2d(x + other.x, y + other.y)
+
+  def -(other: Vector2d): Vector2d = Vector2d(x - other.x, y - other.y)
+
+  def *(scalar: Double): Vector2d = Vector2d(x * scalar, y * scalar)
+
+  def /(scalar: Double): Vector2d = this * (1.0 / scalar)
+
+  def magnitude: Double = math.sqrt(x * x + y * y)
+
+  def normalize: Vector2d =
+    val mag = magnitude
+    if (mag == 0) this else this * (1.0 / mag)
+
+  def distance(other: Vector2d): Double =
+    math.sqrt(math.pow(x - other.x, 2) + math.pow(y - other.y, 2))
+}
+
+object Vector2d {
+  val zero: Vector2d = Vector2d(0, 0)
+}
+
+object Boids {
+  val AVOID_RADIUS = 50
+  def separation(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d =
+    nearbyBoidsPositions
+      .filter(boidPosition.distance(_) < AVOID_RADIUS)
+      .map(otherBoidPosition => (boidPosition - otherBoidPosition).normalize)
+      .foldLeft(Vector2d.zero)(_ + _)
+}
+
+case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {
+
+
+}
