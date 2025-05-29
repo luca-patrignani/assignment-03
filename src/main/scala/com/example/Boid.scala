@@ -26,11 +26,20 @@ object Vector2d {
 
 object Boids {
   val AVOID_RADIUS = 50
+
   def separation(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d =
     nearbyBoidsPositions
       .filter(boidPosition.distance(_) < AVOID_RADIUS)
       .map(otherBoidPosition => (boidPosition - otherBoidPosition).normalize)
       .foldLeft(Vector2d.zero)(_ + _)
+
+  def alignment(boidVelocity: Vector2d, nearbyBoidsVelocities: Seq[Vector2d]): Vector2d = nearbyBoidsVelocities match
+    case Seq() => Vector2d.zero
+    case _ =>
+      val averageVelocity = nearbyBoidsVelocities
+        .foldLeft(Vector2d.zero)(_ + _)
+        / nearbyBoidsVelocities.size
+      (averageVelocity - boidVelocity).normalize
 }
 
 case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {
