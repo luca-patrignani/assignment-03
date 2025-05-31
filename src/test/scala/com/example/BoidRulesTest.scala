@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Assertions._
 
 object BoidRulesTest {
 
-  private val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100)
+  private val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5)
 
   object BoidSeparationTest {
     private val testBoid = Vector2d(100, 100)
@@ -13,9 +13,9 @@ object BoidRulesTest {
     @Test
     def testSeparation(): Unit =
       val nearbyBoids = Seq(
-        Vector2d(90, 100),   // 10 units to the left
-        Vector2d(110, 100),  // 10 units to the right
-        Vector2d(100, 90)    // 10 units above
+        Vector2d(90, 100), // 10 units to the left
+        Vector2d(110, 100), // 10 units to the right
+        Vector2d(100, 90) // 10 units above
       )
       val separationForce = rules.separation(testBoid, nearbyBoids)
       assertTrue(separationForce.y > 0)
@@ -23,20 +23,20 @@ object BoidRulesTest {
 
     @Test
     def testSeparationWithDistantBoid(): Unit =
-      val farBoid = Vector2d(200, 200)  // Far away
+      val farBoid = Vector2d(200, 200) // Far away
       val separationForce = rules.separation(testBoid, Seq(farBoid))
       assertEquals(Vector2d.zero, separationForce)
   }
 
   object BoidAlignmentTest {
-    private val testVelocity = Vector2d(1, 0)  // Moving right
+    private val testVelocity = Vector2d(1, 0) // Moving right
 
     @Test
     def testBasicAlignment(): Unit =
       val nearbyVelocities = Seq(
-        Vector2d(0, 1),   // Moving up
-        Vector2d(0, 1),   // Moving up
-        Vector2d(0, 1)    // Moving up
+        Vector2d(0, 1), // Moving up
+        Vector2d(0, 1), // Moving up
+        Vector2d(0, 1) // Moving up
       )
       val alignmentForce = rules.alignment(testVelocity, nearbyVelocities)
       // Should steer upward to match neighbors
@@ -64,9 +64,9 @@ object BoidRulesTest {
     @Test
     def testBasicCohesion(): Unit =
       val nearbyPositions = Seq(
-        Vector2d(120, 120),  // Above and right
-        Vector2d(120, 120),  // Above and right
-        Vector2d(120, 120)   // Above and right
+        Vector2d(120, 120), // Above and right
+        Vector2d(120, 120), // Above and right
+        Vector2d(120, 120) // Above and right
       )
       val cohesionForce = rules.cohesion(testPosition, nearbyPositions)
       // Should steer toward center of mass (up and right)
@@ -116,5 +116,32 @@ object BoidRulesTest {
       assertTrue(nearbyBoids.isEmpty)
   }
 
-}
+  object UpdateBoidsTest {
+    private val rules = BoidRules(
+      avoidRadius = 25,
+      perceptionRadius = 100,
+      maxSpeed = 10
+    )
+    private val boid = Boid(Vector2d(100, 100), Vector2d(1, 0))
 
+    @Test
+    def testUpdateWithNoBoids(): Unit = {
+      val updatedBoid = rules.update(boid)(Seq(boid))
+
+      // Should continue in same direction
+      assertEquals(
+        boid.position + boid.velocity,
+        updatedBoid.position
+      )
+      assertEquals(boid.velocity, updatedBoid.velocity)
+    }
+
+    @Test
+    def testUpdateRespectingMaxSpeed(): Unit = {
+      val fastBoid = Boid(Vector2d(100, 100), Vector2d(20, 20))
+      val updatedBoid = rules.update(fastBoid)(Seq(fastBoid))
+
+      assertTrue(updatedBoid.velocity.magnitude <= rules.maxSpeed)
+    }
+  }
+}
