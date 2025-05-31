@@ -24,12 +24,10 @@ object Vector2d {
   val zero: Vector2d = Vector2d(0, 0)
 }
 
-object Boids {
-  val AVOID_RADIUS = 50
-
+case class BoidRules(avoidRadius: Double, perceptionRadius: Double) {
   def separation(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d =
     nearbyBoidsPositions
-      .filter(boidPosition.distance(_) < AVOID_RADIUS)
+      .filter(boidPosition.distance(_) < avoidRadius)
       .map(otherBoidPosition => (boidPosition - otherBoidPosition).normalize)
       .foldLeft(Vector2d.zero)(_ + _)
 
@@ -49,12 +47,10 @@ object Boids {
         / nearbyBoidsPositions.size
       (centerOfMass - boidPosition).normalize
 
-  val PERCEPTION_RADIUS = 100 // Radius within which boids can see others
-
   def nearbyBoids(boid: Boid, allBoids: Seq[Boid]): Seq[Boid] =
     allBoids
       .filter(_ != boid)
-      .filter(_.position.distance(boid.position) < PERCEPTION_RADIUS)
+      .filter(_.position.distance(boid.position) < perceptionRadius)
 }
 
 case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {
