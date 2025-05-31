@@ -48,6 +48,13 @@ object Boids {
         .foldLeft(Vector2d.zero)(_ + _)
         / nearbyBoidsPositions.size
       (centerOfMass - boidPosition).normalize
+
+  val PERCEPTION_RADIUS = 100 // Radius within which boids can see others
+
+  def nearbyBoids(boid: Boid, allBoids: Seq[Boid]): Seq[Boid] =
+    allBoids
+      .filter(_ != boid)
+      .filter(_.position.distance(boid.position) < PERCEPTION_RADIUS)
 }
 
 case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {

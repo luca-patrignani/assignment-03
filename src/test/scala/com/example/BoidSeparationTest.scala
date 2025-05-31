@@ -83,3 +83,31 @@ object BoidCohesionTest {
     val cohesionForce = Boids.cohesion(testPosition, nearbyPositions)
     assertEquals(Vector2d.zero, cohesionForce)
 }
+
+object BoidPerceptionTest {
+  private val centerBoid = Boid(Vector2d(100, 100))
+
+  @Test
+  def testCollectNearbyBoids(): Unit =
+    val allBoids = Seq(
+      centerBoid,
+      Boid(Vector2d(150, 150)), // Inside radius
+      Boid(Vector2d(300, 300)) // Outside radius
+    )
+
+    val nearbyBoids = Boids.nearbyBoids(centerBoid, allBoids)
+
+    assertEquals(1, nearbyBoids.size)
+    assertEquals(Vector2d(150, 150), nearbyBoids.head.position)
+
+  @Test
+  def testNoBoidsTooClose(): Unit =
+    val allBoids = Seq(
+      centerBoid,
+      Boid(Vector2d(300, 300)),
+      Boid(Vector2d(400, 400))
+    )
+
+    val nearbyBoids = Boids.nearbyBoids(centerBoid, allBoids)
+    assertTrue(nearbyBoids.isEmpty)
+}
