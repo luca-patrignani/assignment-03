@@ -40,6 +40,14 @@ object Boids {
         .foldLeft(Vector2d.zero)(_ + _)
         / nearbyBoidsVelocities.size
       (averageVelocity - boidVelocity).normalize
+
+  def cohesion(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d = nearbyBoidsPositions match
+    case Seq() => Vector2d.zero
+    case _ =>
+      val centerOfMass = nearbyBoidsPositions
+        .foldLeft(Vector2d.zero)(_ + _)
+        / nearbyBoidsPositions.size
+      (centerOfMass - boidPosition).normalize
 }
 
 case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {

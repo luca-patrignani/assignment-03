@@ -53,3 +53,33 @@ object BoidAlignmentTest {
     val alignmentForce = Boids.alignment(testVelocity, nearbyVelocities)
     assertEquals(Vector2d.zero, alignmentForce)
 }
+
+object BoidCohesionTest {
+  private val testPosition = Vector2d(100, 100)
+
+  @Test
+  def testBasicCohesion(): Unit =
+    val nearbyPositions = Seq(
+      Vector2d(120, 120),  // Above and right
+      Vector2d(120, 120),  // Above and right
+      Vector2d(120, 120)   // Above and right
+    )
+    val cohesionForce = Boids.cohesion(testPosition, nearbyPositions)
+    // Should steer toward center of mass (up and right)
+    assertTrue(cohesionForce.x > 0)
+    assertTrue(cohesionForce.y > 0)
+
+  @Test
+  def testCohesionWithNoNeighbors(): Unit =
+    val cohesionForce = Boids.cohesion(testPosition, Seq.empty)
+    assertEquals(Vector2d.zero, cohesionForce)
+
+  @Test
+  def testCohesionWithSamePosition(): Unit =
+    val nearbyPositions = Seq(
+      Vector2d(100, 100),
+      Vector2d(100, 100)
+    )
+    val cohesionForce = Boids.cohesion(testPosition, nearbyPositions)
+    assertEquals(Vector2d.zero, cohesionForce)
+}
