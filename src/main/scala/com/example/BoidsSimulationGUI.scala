@@ -1,6 +1,5 @@
 package com.example
 
-
 import java.awt.geom.Ellipse2D
 import scala.swing.*
 import scala.swing.event.*
@@ -10,12 +9,11 @@ import scala.util.Random
 import javax.swing.{Timer => SwingTimer}
 
 object BoidsSimulationGUI extends SimpleSwingApplication:
-  var boids: Seq[Boid] = Seq.empty
+  var boids: Seq[BoidState] = Seq.empty
   val space = Vector2d(1000, 500)
   val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5, tSpace = space)
 
   class Environment() extends Panel:
-
     preferredSize = Dimension(space.x.toInt, space.y.toInt)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
@@ -95,8 +93,6 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
     listenTo(generateButton, startButton, stopButton,
       separationSlider, alignmentSlider, cohesionSlider)
 
-
-
     reactions += {
       case ButtonClicked(`generateButton`) =>
         generateButton.enabled = false
@@ -104,7 +100,7 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
         numBoidsLabel.text = s"Num. Boids: ${numBoidsField.text}"
         framerateLabel.text = "Framerate: 0"
         given random: Random = Random()
-        boids = for i <- 1 to numBoidsField.text.toInt yield Boid(
+        boids = for i <- 1 to numBoidsField.text.toInt yield BoidState(
             Vector2d(random.nextInt(preferredSize.width), random.nextInt(preferredSize.height)),
             Vector2d(random.nextInt(3), random.nextInt(3)))
         environmentCanvas.updateState()

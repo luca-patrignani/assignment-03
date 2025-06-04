@@ -28,7 +28,7 @@ object BoidRulesTest {
       assertEquals(Vector2d.zero, separationForce)
   }
 
-  object BoidAlignmentTest {
+  object BoidStateAlignmentTest$ {
     private val testVelocity = Vector2d(1, 0) // Moving right
 
     @Test
@@ -58,7 +58,7 @@ object BoidRulesTest {
       assertEquals(Vector2d.zero, alignmentForce)
   }
 
-  object BoidCohesionTest {
+  object BoidStateCohesionTest$ {
     private val testPosition = Vector2d(100, 100)
 
     @Test
@@ -88,15 +88,15 @@ object BoidRulesTest {
       assertEquals(Vector2d.zero, cohesionForce)
   }
 
-  object BoidPerceptionTest {
-    private val centerBoid = Boid(Vector2d(100, 100))
+  object BoidStatePerceptionTest$ {
+    private val centerBoid = BoidState(Vector2d(100, 100))
 
     @Test
     def testCollectNearbyBoids(): Unit =
       val allBoids = Seq(
         centerBoid,
-        Boid(Vector2d(150, 150)), // Inside radius
-        Boid(Vector2d(300, 300)) // Outside radius
+        BoidState(Vector2d(150, 150)), // Inside radius
+        BoidState(Vector2d(300, 300)) // Outside radius
       )
 
       val nearbyBoids = rules.nearbyBoids(centerBoid, allBoids)
@@ -108,8 +108,8 @@ object BoidRulesTest {
     def testNoBoidsTooClose(): Unit =
       val allBoids = Seq(
         centerBoid,
-        Boid(Vector2d(300, 300)),
-        Boid(Vector2d(400, 400))
+        BoidState(Vector2d(300, 300)),
+        BoidState(Vector2d(400, 400))
       )
 
       val nearbyBoids = rules.nearbyBoids(centerBoid, allBoids)
@@ -122,7 +122,7 @@ object BoidRulesTest {
       perceptionRadius = 100,
       maxSpeed = 10
     )
-    private val boid = Boid(Vector2d(100, 100), Vector2d(1, 0))
+    private val boid = BoidState(Vector2d(100, 100), Vector2d(1, 0))
 
     @Test
     def testUpdateWithNoBoids(): Unit = {
@@ -138,7 +138,7 @@ object BoidRulesTest {
 
     @Test
     def testUpdateRespectingMaxSpeed(): Unit = {
-      val fastBoid = Boid(Vector2d(100, 100), Vector2d(20, 20))
+      val fastBoid = BoidState(Vector2d(100, 100), Vector2d(20, 20))
       val updatedBoid = rules.update(fastBoid)(Seq(fastBoid))
 
       assertTrue(updatedBoid.velocity.magnitude <= rules.maxSpeed)

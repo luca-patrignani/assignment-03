@@ -1,6 +1,12 @@
 package com.example
 
+import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.receptionist.Receptionist
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+
 import java.lang.Math.clamp
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Random
 
 case class Vector2d(x: Double, y: Double) {
 
@@ -52,14 +58,13 @@ object Vector2d {
   val zero: Vector2d = Vector2d(0, 0)
 }
 
-case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {
-}
+case class BoidState(position: Vector2d, velocity: Vector2d = Vector2d.zero) extends Message
 
 case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Double, tSpace: Vector2d) {
   given space: Vector2d = tSpace
   def separation(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d =
     nearbyBoidsPositions
-      .filter(boidPosition.tDistance(_) < avoidRadius)
+      .filter(boidPosition.distance(_) < avoidRadius)
       .map(otherBoidPosition => (boidPosition - otherBoidPosition).normalized)
       .foldLeft(Vector2d.zero)(_ + _)
 
@@ -79,12 +84,12 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
         / nearbyBoidsPositions.size
       (centerOfMass - boidPosition).normalized
 
-  def nearbyBoids(boid: Boid, allBoids: Seq[Boid]): Seq[Boid] =
+  def nearbyBoids(boid: BoidState, allBoids: Seq[BoidState]): Seq[BoidState] =
     allBoids
       .filter(_ != boid)
-      .filter(_.position.tDistance(boid.position) < perceptionRadius)
+      .filter(_.position.distance(boid.position) < perceptionRadius)
 
-  def update(boid: Boid)(allBoids: Seq[Boid]): Boid =
+  def update(boid: BoidState)(allBoids: Seq[BoidState]): BoidState =
 
     val nearby = nearbyBoids(boid, allBoids)
 
@@ -95,20 +100,18 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
     if newVelocity.magnitude > maxSpeed then
       newVelocity = newVelocity.normalized * maxSpeed
     val newPosition = boid.position + newVelocity
-    Boid(newPosition.wrapped, newVelocity)
+    BoidState(newPosition.wrapped, newVelocity)
 }
 
-/*object Boid {
+object Boid {
   sealed trait Command
   case object Stop extends Command
-  private case object UpdateVel extends Command
-  private case object UpdatePos extends Command
-
-  private val boids = Seq(Vector2d(10, 4), Vector2d(8, 2), Vector2d(10, 0))
+  case class UpdateWeigths(separation: Double, cohesion: Double, alignment: Double) extends Message
+  case class RequestInfo(replyTo: ActorRef[Message]) extends Message
+  case class Resume() extends Message
 
   def apply(
-             position: Vector2d,
-             velocity: Vector2d = Vector2d.zero,
+             state: BoidState,
              separationWeight: Double,
              alignmentWeight: Double,
              cohesionWeight: Double,
@@ -118,14 +121,13 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
     Behaviors.setup { ctx =>
       ctx.system.receptionist ! Receptionist.Subscribe(BoidsRender.Service, ctx.self)
       Behaviors.withTimers { timers =>
-        timers.startTimerAtFixedRate(UpdatePos, period)
-        boidLogic(position, velocity, separationWeight, alignmentWeight, cohesionWeight, ctx, frontends)
+        timers.startTimerAtFixedRate(BoidState, period)
+        boidLogic(state, separationWeight, alignmentWeight, cohesionWeight, ctx, frontends)
       }
     }
 
   private def boidLogic(
-                         position: Vector2d,
-                         velocity: Vector2d,
+                         state: BoidState,
                          separationWeight: Double,
                          alignmentWeight: Double,
                          cohesionWeight: Double,
@@ -137,19 +139,15 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
       if (services == frontends)
         Behaviors.same
       else
-        boidLogic(position, velocity, separationWeight, alignmentWeight, cohesionWeight, ctx, services)
+        boidLogic(state, separationWeight, alignmentWeight, cohesionWeight, ctx, services)
 
-    case UpdateVel =>
-      val sep = separation(position, boids) * separationWeight
-      val coh = cohesion(position, boids) * cohesionWeight
-      val ali = alignment(velocity, boids) * alignmentWeight
-      val newVel = velocity + sep + coh + ali
-      boidLogic(position, newVel, separationWeight, alignmentWeight, cohesionWeight, ctx, frontends)
-
-    case UpdatePos =>
-      val newPos = position + velocity
-      boidLogic(newPos, velocity, separationWeight, alignmentWeight, cohesionWeight, ctx, frontends)
+    case UpdateWeigths(separation, alignment, cohesion) =>
+      boidLogic(state, separation, alignment, cohesion, ctx, frontends)
+      
+    case RequestInfo(replyTo) =>
+      replyTo ! ctx.
 
     case Stop => Behaviors.stopped
+
+    case Resume => ???
   }
-*/
