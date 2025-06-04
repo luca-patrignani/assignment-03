@@ -13,6 +13,7 @@ libraryDependencies ++= Seq(
   akkaGroup %% "akka-actor" % akkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.5.6",
   akkaGroup %% "akka-actor-testkit-typed" % akkaVersion % Test,
+  akkaGroup%% "akka-cluster-typed" % akkaVersion,
   "org.scalatest" %% "scalatest" % "3.2.19" % Test,
   "org.scala-lang.modules" %% "scala-swing" % "3.0.0",
   "org.junit.jupiter" % "junit-jupiter-api" % "5.12.2" % Test,
