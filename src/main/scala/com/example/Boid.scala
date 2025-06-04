@@ -1,20 +1,5 @@
 package com.example
 
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.receptionist.Receptionist
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-
-import scala.concurrent.duration.FiniteDuration
-import scala.util.Random
-
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.receptionist.Receptionist
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import com.example.BoidsRender
-
-import scala.concurrent.duration.FiniteDuration
-import scala.util.Random
-
 case class Vector2d(x: Double, y: Double) {
 
   def +(other: Vector2d): Vector2d = Vector2d(x + other.x, y + other.y)
