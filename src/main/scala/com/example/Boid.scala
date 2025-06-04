@@ -27,7 +27,7 @@ case class Vector2d(x: Double, y: Double) {
 
   def magnitude: Double = math.sqrt(x * x + y * y)
 
-  def normalize: Vector2d =
+  def normalized: Vector2d =
     val mag = magnitude
     if (mag == 0) this else this * (1.0 / mag)
 
@@ -42,9 +42,7 @@ object Vector2d {
 case class Boid(position: Vector2d, velocity: Vector2d = Vector2d.zero) {
 }
 
-
 case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Double) {
-
   def separation(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d =
     nearbyBoidsPositions
       .filter(boidPosition.distance(_) < avoidRadius)
