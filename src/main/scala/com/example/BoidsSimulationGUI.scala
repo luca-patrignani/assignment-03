@@ -11,14 +11,15 @@ import javax.swing.{Timer => SwingTimer}
 
 object BoidsSimulationGUI extends SimpleSwingApplication:
   var boids: Seq[Boid] = Seq.empty
-  val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5)
+  val space = Vector2d(1000, 500)
+  val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5, tSpace = space)
 
   class Environment() extends Panel:
 
-    preferredSize = Dimension(800, 500)
+    preferredSize = Dimension(space.x.toInt, space.y.toInt)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
-      g.clearRect(0, 0,size.width,size.height)
+      g.clearRect(0, 0,preferredSize.width+10,preferredSize.height+10)
       g.setColor(Color.BLACK)
       boids.foreach(v => {
         val boid = new Ellipse2D.Double(v.position.x - 2, v.position.y - 2, 2 * 2, 2 * 2)
@@ -26,14 +27,13 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
       })
 
     def updateState(): Unit =
-      boids.map(b => rules.update(b)(boids))
-
+      boids = boids.map(rules.update(_)(boids))
       println(s"update state")
       repaint()
 
   def top: Frame = new MainFrame:
     title = "Boids Simulation"
-    preferredSize = Dimension(1000, 700)
+    preferredSize = Dimension(space.x.toInt,space.y.toInt + 200)
 
     val timer = new SwingTimer(16, _ => environmentCanvas.updateState()) // ~60 FPS
 
@@ -104,7 +104,9 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
         numBoidsLabel.text = s"Num. Boids: ${numBoidsField.text}"
         framerateLabel.text = "Framerate: 0"
         given random: Random = Random()
-        boids = for i <- 1 to numBoidsField.text.toInt yield Boid(Vector2d(random.nextInt(size.width), random.nextInt(size.height)))
+        boids = for i <- 1 to numBoidsField.text.toInt yield Boid(
+            Vector2d(random.nextInt(preferredSize.width), random.nextInt(preferredSize.height)),
+            Vector2d(random.nextInt(3), random.nextInt(3)))
         environmentCanvas.updateState()
         println(s"Generate clicked with ${numBoidsField.text} boids")
 
