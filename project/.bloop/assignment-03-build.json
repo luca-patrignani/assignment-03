@@ -220,7 +220,7 @@
         "platform": {
             "name": "jvm",
             "config": {
-                "home": "/home/luca/.jdks/temurin-23.0.2",
+                "home": "/usr/lib/jvm/java-21-amazon-corretto",
                 "options": [
                     "-Duser.dir=/home/luca/assignment-03/project"
                 ]
@@ -229,7 +229,7 @@
                 
             ],
             "runtimeConfig": {
-                "home": "/home/luca/.jdks/temurin-23.0.2",
+                "home": "/usr/lib/jvm/java-21-amazon-corretto",
                 "options": [
                     "-Duser.dir=/home/luca/assignment-03/project"
                 ]
