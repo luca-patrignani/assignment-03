@@ -3,6 +3,7 @@ package com.example
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import com.example.Boid.Command
 
 import java.lang.Math.clamp
 import scala.concurrent.duration.FiniteDuration
@@ -58,7 +59,8 @@ object Vector2d {
   val zero: Vector2d = Vector2d(0, 0)
 }
 
-case class BoidState(position: Vector2d, velocity: Vector2d = Vector2d.zero) extends Message
+case class BoidState(position: Vector2d, velocity: Vector2d = Vector2d.zero) extends Command
+
 
 case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Double, tSpace: Vector2d) {
   given space: Vector2d = tSpace
@@ -104,11 +106,11 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
 }
 
 object Boid {
-  sealed trait Command
+  sealed trait Command extends Message
   case object Stop extends Command
-  case class UpdateWeigths(separation: Double, cohesion: Double, alignment: Double) extends Message
-  case class RequestInfo(replyTo: ActorRef[Message]) extends Message
-  case class Resume() extends Message
+  case class UpdateWeights(separation: Double, cohesion: Double, alignment: Double) extends Command
+  case class RequestInfo(replyTo: ActorRef[Command]) extends Command
+  case object Resume extends Command
 
   def apply(
              state: BoidState,
@@ -118,10 +120,10 @@ object Boid {
              period: FiniteDuration,
              frontends: List[ActorRef[BoidsRender.Render]] = List.empty
            )(using random: Random): Behavior[Command | Receptionist.Listing] =
-    Behaviors.setup { ctx =>
+    Behaviors.setup[Command | Receptionist.Listing] { ctx =>
       ctx.system.receptionist ! Receptionist.Subscribe(BoidsRender.Service, ctx.self)
       Behaviors.withTimers { timers =>
-        timers.startTimerAtFixedRate(BoidState, period)
+        timers.startTimerAtFixedRate(state, period)
         boidLogic(state, separationWeight, alignmentWeight, cohesionWeight, ctx, frontends)
       }
     }
@@ -141,13 +143,13 @@ object Boid {
       else
         boidLogic(state, separationWeight, alignmentWeight, cohesionWeight, ctx, services)
 
-    case UpdateWeigths(separation, alignment, cohesion) =>
+    case UpdateWeights(separation, alignment, cohesion) =>
       boidLogic(state, separation, alignment, cohesion, ctx, frontends)
       
-    case RequestInfo(replyTo) =>
-      replyTo ! ctx.
+    case RequestInfo(replyTo) => ???
+      //replyTo ! ctx.
 
     case Stop => Behaviors.stopped
 
-    case Resume => ???
+    //case Resume => ???
   }

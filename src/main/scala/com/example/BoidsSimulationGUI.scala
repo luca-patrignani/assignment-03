@@ -12,6 +12,7 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
   var boids: Seq[BoidState] = Seq.empty
   val space = Vector2d(1000, 500)
   val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5, tSpace = space)
+  val environmentCanvas = new Environment
 
   class Environment() extends Panel:
     preferredSize = Dimension(space.x.toInt, space.y.toInt)
@@ -24,10 +25,10 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
         g.draw(boid)
       })
 
-    def updateState(): Unit =
-      boids = boids.map(rules.update(_)(boids))
-      println(s"update state")
-      repaint()
+  def render(newBoids: Seq[BoidState]): Unit =
+    boids = newBoids
+    println(s"update state")
+    environmentCanvas.repaint()
 
   def top: Frame = new MainFrame:
     title = "Boids Simulation"
@@ -43,7 +44,6 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
     val numBoidsLabel = new Label("Num. Boids: 0")
     val framerateLabel = new Label("Framerate: 0")
 
-    val environmentCanvas = new Environment
 
     def createSlider(name: String): (Label, Slider) =
       val label = new Label(name)
