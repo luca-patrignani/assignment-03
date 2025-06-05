@@ -18,12 +18,12 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
     preferredSize = Dimension(space.x.toInt, space.y.toInt)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
-      g.clearRect(0, 0,preferredSize.width+10,preferredSize.height+10)
+      g.clearRect(0, 0, preferredSize.width + 10, preferredSize.height + 10)
       g.setColor(Color.BLACK)
-      boids.foreach(v => {
+      boids.foreach { v =>
         val boid = new Ellipse2D.Double(v.position.x - 2, v.position.y - 2, 2 * 2, 2 * 2)
         g.draw(boid)
-      })
+      }
 
   def render(newBoids: Seq[BoidState]): Unit =
     boids = newBoids
@@ -32,9 +32,7 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
 
   def top: Frame = new MainFrame:
     title = "Boids Simulation"
-    preferredSize = Dimension(space.x.toInt,space.y.toInt + 200)
-
-    val timer = new SwingTimer(16, _ => environmentCanvas.updateState()) // ~60 FPS
+    preferredSize = Dimension(space.x.toInt, space.y.toInt + 200)
 
     val numBoidsField = new TextField("0", 5)
     val generateButton = new Button("Generate")
@@ -43,7 +41,6 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
 
     val numBoidsLabel = new Label("Num. Boids: 0")
     val framerateLabel = new Label("Framerate: 0")
-
 
     def createSlider(name: String): (Label, Slider) =
       val label = new Label(name)
@@ -60,15 +57,12 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
     val (alignLabel, alignmentSlider) = createSlider("Alignment")
     val (cohLabel, cohesionSlider) = createSlider("Cohesion")
 
-
     val topPanel = new BoxPanel(Orientation.Vertical):
       contents += new FlowPanel(FlowPanel.Alignment.Left)(numBoidsLabel, framerateLabel)
       contents += new FlowPanel(FlowPanel.Alignment.Left)(
-        new Label("Num Boids: "), numBoidsField,
-        generateButton, startButton, stopButton
+        new Label("Num Boids: "), numBoidsField, generateButton, startButton, stopButton
       )
       border = BorderFactory.createEmptyBorder(10, 10, 10, 10)
-
 
     val slidersPanel = new BoxPanel(Orientation.Horizontal):
       contents += new BoxPanel(Orientation.Vertical):
@@ -90,8 +84,7 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
       layout(slidersPanel) = BorderPanel.Position.South
 
     // ACTION LISTENER
-    listenTo(generateButton, startButton, stopButton,
-      separationSlider, alignmentSlider, cohesionSlider)
+    listenTo(generateButton, startButton, stopButton, separationSlider, alignmentSlider, cohesionSlider)
 
     reactions += {
       case ButtonClicked(`generateButton`) =>
@@ -100,24 +93,27 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
         numBoidsLabel.text = s"Num. Boids: ${numBoidsField.text}"
         framerateLabel.text = "Framerate: 0"
         given random: Random = Random()
-        boids = for i <- 1 to numBoidsField.text.toInt yield BoidState(
+        boids =
+          for i <- 1 to numBoidsField.text.toInt
+          yield BoidState(
             Vector2d(random.nextInt(preferredSize.width), random.nextInt(preferredSize.height)),
-            Vector2d(random.nextInt(3), random.nextInt(3)))
-        environmentCanvas.updateState()
+            Vector2d(random.nextInt(3), random.nextInt(3))
+          )
+        render(boids)
         println(s"Generate clicked with ${numBoidsField.text} boids")
 
       case ButtonClicked(`startButton`) =>
         startButton.enabled = false
         generateButton.enabled = false
         stopButton.enabled = true
-        timer.start()
+        // timer.start() IDK how to implement this actor based TODO
         println("Simulation started")
 
       case ButtonClicked(`stopButton`) =>
         stopButton.enabled = false
         generateButton.enabled = true
         startButton.enabled = true
-        timer.stop()
+        // timer.stop() same as below TODO
         println("Simulation stopped")
 
       case ValueChanged(`separationSlider`) =>

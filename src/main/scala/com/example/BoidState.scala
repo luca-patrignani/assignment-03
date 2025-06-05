@@ -28,7 +28,7 @@ case class Vector2d(x: Double, y: Double) {
   def distance(other: Vector2d): Double =
     math.sqrt(math.pow(x - other.x, 2) + math.pow(y - other.y, 2))
 
-  //Distanza toroidale
+  // Toroidal Distance
   def tDistance(other: Vector2d)(using space: Vector2d): Double =
     val dx = math.abs(x - other.x)
     val dy = math.abs(y - other.y)
@@ -36,8 +36,8 @@ case class Vector2d(x: Double, y: Double) {
     val wrappedDy = math.min(dy, space.y - dy)
     math.hypot(wrappedDx, wrappedDy)
 
-  /** Vettore differenza toroidale: direzione più corta in uno spazio che si avvolge */
-  def --(other: Vector2d)(using space: Vector2d ): Vector2d =
+  /** Toroidal difference: (shortest distance in the wrapped space) */
+  def --(other: Vector2d)(using space: Vector2d): Vector2d =
     val dx = minimalOffset(x, other.x, space.x)
     val dy = minimalOffset(y, other.y, space.y)
     Vector2d(dx, dy)
@@ -47,7 +47,7 @@ case class Vector2d(x: Double, y: Double) {
     val wrapped = if raw > 0 then raw - max else raw + max
     if math.abs(raw) < math.abs(wrapped) then raw else wrapped
 
-  /** Wrappa la posizione entro [0, width] e [0, height] */
+  /** Wrappa pos into [0, width] and [0, height] */
   def wrapped(using space: Vector2d): Vector2d =
     Vector2d(
       (x % space.x + space.x) % space.x,
@@ -60,7 +60,6 @@ object Vector2d {
 }
 
 case class BoidState(position: Vector2d, velocity: Vector2d = Vector2d.zero) extends Command
-
 
 case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Double, tSpace: Vector2d) {
   given space: Vector2d = tSpace
@@ -99,27 +98,30 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
     val alignmentForce = alignment(boid.velocity, nearby.map(_.velocity))
     val cohesionForce = cohesion(boid.position, nearby.map(_.position))
     var newVelocity = boid.velocity + separationForce + alignmentForce + cohesionForce
-    if newVelocity.magnitude > maxSpeed then
-      newVelocity = newVelocity.normalized * maxSpeed
+    if newVelocity.magnitude > maxSpeed then newVelocity = newVelocity.normalized * maxSpeed
     val newPosition = boid.position + newVelocity
     BoidState(newPosition.wrapped, newVelocity)
 }
 
 object Boid {
   sealed trait Command extends Message
+
   case object Stop extends Command
+
   case class UpdateWeights(separation: Double, cohesion: Double, alignment: Double) extends Command
+
   case class RequestInfo(replyTo: ActorRef[Command]) extends Command
+
   case object Resume extends Command
 
   def apply(
-             state: BoidState,
-             separationWeight: Double,
-             alignmentWeight: Double,
-             cohesionWeight: Double,
-             period: FiniteDuration,
-             frontends: List[ActorRef[BoidsRender.Render]] = List.empty
-           )(using random: Random): Behavior[Command | Receptionist.Listing] =
+      state: BoidState,
+      separationWeight: Double,
+      alignmentWeight: Double,
+      cohesionWeight: Double,
+      period: FiniteDuration,
+      frontends: List[ActorRef[BoidsRender.Render]] = List.empty
+  )(using random: Random): Behavior[Command | Receptionist.Listing] =
     Behaviors.setup[Command | Receptionist.Listing] { ctx =>
       ctx.system.receptionist ! Receptionist.Subscribe(BoidsRender.Service, ctx.self)
       Behaviors.withTimers { timers =>
@@ -129,13 +131,13 @@ object Boid {
     }
 
   private def boidLogic(
-                         state: BoidState,
-                         separationWeight: Double,
-                         alignmentWeight: Double,
-                         cohesionWeight: Double,
-                         ctx: ActorContext[Command | Receptionist.Listing],
-                         frontends: List[ActorRef[BoidsRender.Render]]
-                       ): Behavior[Command | Receptionist.Listing] = Behaviors.receiveMessage {
+      state: BoidState,
+      separationWeight: Double,
+      alignmentWeight: Double,
+      cohesionWeight: Double,
+      ctx: ActorContext[Command | Receptionist.Listing],
+      frontends: List[ActorRef[BoidsRender.Render]]
+  ): Behavior[Command | Receptionist.Listing] = Behaviors.receiveMessage {
     case msg: Receptionist.Listing =>
       val services = msg.serviceInstances(BoidsRender.Service).toList
       if (services == frontends)
@@ -145,11 +147,12 @@ object Boid {
 
     case UpdateWeights(separation, alignment, cohesion) =>
       boidLogic(state, separation, alignment, cohesion, ctx, frontends)
-      
+
     case RequestInfo(replyTo) => ???
-      //replyTo ! ctx.
+    // replyTo ! ctx.
 
     case Stop => Behaviors.stopped
 
-    //case Resume => ???
+    // case Resume => ???
   }
+}
