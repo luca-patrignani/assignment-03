@@ -13,11 +13,11 @@ object BoidsRender:
   // Constants
   val width = 800
   val height = 600
-  sealed trait Command
+  sealed trait Command extends Message
   final case class Render(state: BoidState, id: ActorRef[_]) extends Message with Command
   private case object Flush extends Command // Private message (similar to a private method in OOP)
   val Service = ServiceKey[Render]("RenderService")
-  def apply(frameRate: Double = 60): Behavior[Command] = {
+  def apply(actorRef: ActorRef[Message | Receptionist.Listing], frameRate: Double = 60): Behavior[Command] = {
     Behaviors.setup { ctx =>
       val frontendGui = BoidsSimulationGUI // init the gui
       Behaviors.withTimers { timers =>
