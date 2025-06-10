@@ -3,8 +3,10 @@ package com.example
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import com.example.Boid.Command
+import akka.actor.typed.scaladsl.AskPattern.Askable
+import com.example.BoidsRender.RenderMessage
 
+import scala.concurrent.duration.DurationInt
 import java.lang.Math.clamp
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Random
@@ -28,27 +30,8 @@ case class Vector2d(x: Double, y: Double) {
   def distance(other: Vector2d): Double =
     math.sqrt(math.pow(x - other.x, 2) + math.pow(y - other.y, 2))
 
-  // Toroidal Distance
-  def tDistance(other: Vector2d)(using space: Vector2d): Double =
-    val dx = math.abs(x - other.x)
-    val dy = math.abs(y - other.y)
-    val wrappedDx = math.min(dx, space.x - dx)
-    val wrappedDy = math.min(dy, space.y - dy)
-    math.hypot(wrappedDx, wrappedDy)
-
-  /** Toroidal difference: (shortest distance in the wrapped space) */
-  def --(other: Vector2d)(using space: Vector2d): Vector2d =
-    val dx = minimalOffset(x, other.x, space.x)
-    val dy = minimalOffset(y, other.y, space.y)
-    Vector2d(dx, dy)
-
-  private def minimalOffset(a: Double, b: Double, max: Double): Double =
-    val raw = b - a
-    val wrapped = if raw > 0 then raw - max else raw + max
-    if math.abs(raw) < math.abs(wrapped) then raw else wrapped
-
   /** Wrappa pos into [0, width] and [0, height] */
-  def wrapped(using space: Vector2d): Vector2d =
+  def wrapped(space: Vector2d): Vector2d =
     Vector2d(
       (x % space.x + space.x) % space.x,
       (y % space.y + space.y) % space.y
@@ -59,10 +42,9 @@ object Vector2d {
   val zero: Vector2d = Vector2d(0, 0)
 }
 
-case class BoidState(position: Vector2d, velocity: Vector2d = Vector2d.zero) extends Command
+case class BoidState(position: Vector2d, velocity: Vector2d = Vector2d.zero) extends Boid.BoidCommand
 
-case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Double, tSpace: Vector2d) {
-  given space: Vector2d = tSpace
+case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Double) {
   def separation(boidPosition: Vector2d, nearbyBoidsPositions: Seq[Vector2d]): Vector2d =
     nearbyBoidsPositions
       .filter(boidPosition.distance(_) < avoidRadius)
@@ -91,68 +73,112 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
       .filter(_.position.distance(boid.position) < perceptionRadius)
 
   def update(boid: BoidState)(allBoids: Seq[BoidState]): BoidState =
-
     val nearby = nearbyBoids(boid, allBoids)
-
     val separationForce = separation(boid.position, nearby.map(_.position))
     val alignmentForce = alignment(boid.velocity, nearby.map(_.velocity))
     val cohesionForce = cohesion(boid.position, nearby.map(_.position))
     var newVelocity = boid.velocity + separationForce + alignmentForce + cohesionForce
     if newVelocity.magnitude > maxSpeed then newVelocity = newVelocity.normalized * maxSpeed
     val newPosition = boid.position + newVelocity
-    BoidState(newPosition.wrapped, newVelocity)
+    BoidState(newPosition.wrapped(Vector2d(500, 500)), newVelocity)
 }
 
 object Boid {
-  sealed trait Command extends Message
+  sealed trait BoidCommand
 
-  case object Stop extends Command
+  case object Stop extends BoidCommand
 
-  case class UpdateWeights(separation: Double, cohesion: Double, alignment: Double) extends Command
+  case class UpdateWeights(separation: Double, cohesion: Double, alignment: Double) extends BoidCommand
+  
+  case class UpdatePos() extends BoidCommand
 
-  case class RequestInfo(replyTo: ActorRef[Command]) extends Command
+  case class RequestInfo(replyTo: ActorRef[RenderMessage.RenderBoid]) extends BoidCommand
 
-  case object Resume extends Command
+  case class MyListing(listing: Receptionist.Listing) extends BoidCommand
+
+  case object Resume extends BoidCommand
+
+  val Service: akka.actor.typed.receptionist.ServiceKey[BoidCommand] =
+    akka.actor.typed.receptionist.ServiceKey[BoidCommand]("BoidService")
+
+  val period: FiniteDuration = 60.millis
 
   def apply(
       state: BoidState,
       separationWeight: Double,
       alignmentWeight: Double,
       cohesionWeight: Double,
-      period: FiniteDuration,
-      frontends: List[ActorRef[BoidsRender.Render]] = List.empty
-  )(using random: Random): Behavior[Command | Receptionist.Listing] =
-    Behaviors.setup[Command | Receptionist.Listing] { ctx =>
-      ctx.system.receptionist ! Receptionist.Subscribe(BoidsRender.Service, ctx.self)
+  ): Behavior[BoidCommand] =
+    Behaviors.setup[BoidCommand] { ctx =>
+      ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
       Behaviors.withTimers { timers =>
         timers.startTimerAtFixedRate(state, period)
-        boidLogic(state, separationWeight, alignmentWeight, cohesionWeight, ctx, frontends)
+        receivingBehaviour(
+          ctx,
+          state,
+          separationWeight,
+          alignmentWeight,
+          cohesionWeight
+        )
       }
     }
 
-  private def boidLogic(
-      state: BoidState,
-      separationWeight: Double,
-      alignmentWeight: Double,
-      cohesionWeight: Double,
-      ctx: ActorContext[Command | Receptionist.Listing],
-      frontends: List[ActorRef[BoidsRender.Render]]
-  ): Behavior[Command | Receptionist.Listing] = Behaviors.receiveMessage {
-    case msg: Receptionist.Listing =>
-      val services = msg.serviceInstances(BoidsRender.Service).toList
-      if (services == frontends)
+  def receivingBehaviour(
+                          ctx: ActorContext[BoidCommand],
+                          state: BoidState,
+                          separationWeight: Double,
+                          alignmentWeight: Double,
+                          cohesionWeight: Double,
+                        ): Behavior[BoidCommand] = {
+    Behaviors.receiveMessage[BoidCommand] {
+      case UpdatePos() =>
+        ctx.log.info(s"Updating position for boid at ${state.position}")
+        val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5)
+        val listingResponseAdapter = ctx.messageAdapter[Receptionist.Listing](MyListing.apply)
+        val otherBoids = ctx.system.receptionist ! Receptionist.Find(Boid.Service, listingResponseAdapter)
+        val updatedState = ???
+        receivingBehaviour(
+          ctx,
+          updatedState,
+          separationWeight,
+          alignmentWeight,
+          cohesionWeight
+        )
+
+      case MyListing(listing) =>
+        val adapter = ctx.messageAdapter[RenderMessage.RenderBoid](_.boidState)
+        listing.serviceInstances(Boid.Service).foreach(_ ! RequestInfo(adapter))
         Behaviors.same
-      else
-        boidLogic(state, separationWeight, alignmentWeight, cohesionWeight, ctx, services)
 
-    case UpdateWeights(separation, alignment, cohesion) =>
-      boidLogic(state, separation, alignment, cohesion, ctx, frontends)
+      case BoidState(position, velocity) =>
+        ctx.log.info(s"Boid at position $position with velocity $velocity")
+        // val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5)
+        // val updatedState = rules.update(state)(ctx.system.receptionist ! Receptionist.Find(Boid.Service))
+        // ctx.self ! updatedState
+        Behaviors.same
 
-    case RequestInfo(replyTo) => ???
-    // replyTo ! ctx.
+      case Stop =>
+        ctx.log.info(s"Stopping boid at ${state.position}")
+        Behaviors.stopped
 
-    case Stop => Behaviors.stopped
+      case UpdateWeights(separation, alignment, cohesion) =>
+        ctx.log.info(s"Updating weights: separation=$separation, alignment=$alignment, cohesion=$cohesion")
+        receivingBehaviour(
+          ctx,
+          state,
+          separationWeight = separation,
+          alignmentWeight = alignment,
+          cohesionWeight = cohesion
+        )
 
-    // case Resume => ???
+      case RequestInfo(replyTo) =>
+        replyTo ! RenderMessage.RenderBoid(state)
+        Behaviors.same
+
+      case Resume =>
+        Behaviors.same
+    }
   }
+
+
 }

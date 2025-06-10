@@ -8,10 +8,10 @@ import javax.swing.BorderFactory
 import scala.util.Random
 import javax.swing.{Timer => SwingTimer}
 
-object BoidsSimulationGUI extends SimpleSwingApplication:
-  var boids: Seq[BoidState] = Seq.empty
+
+case class BoidsSimulationGUI(generateBoids: (Int, Double, Double, Double) => Unit) extends SimpleSwingApplication:
+  var boids: Seq[Vector2d] = Seq.empty
   val space = Vector2d(1000, 500)
-  val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5, tSpace = space)
   val environmentCanvas = new Environment
 
   class Environment() extends Panel:
@@ -20,14 +20,13 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
     override def paintComponent(g: Graphics2D): Unit =
       g.clearRect(0, 0, preferredSize.width + 10, preferredSize.height + 10)
       g.setColor(Color.BLACK)
-      boids.foreach { v =>
-        val boid = new Ellipse2D.Double(v.position.x - 2, v.position.y - 2, 2 * 2, 2 * 2)
+      boids.foreach { p =>
+        val boid = new Ellipse2D.Double(p.x - 2, p.y - 2, 2 * 2, 2 * 2)
         g.draw(boid)
       }
 
-  def render(newBoids: Seq[BoidState]): Unit =
+  def render(newBoids: Seq[Vector2d]): Unit =
     boids = newBoids
-    println(s"update state")
     environmentCanvas.repaint()
 
   def top: Frame = new MainFrame:
@@ -92,14 +91,10 @@ object BoidsSimulationGUI extends SimpleSwingApplication:
         startButton.enabled = true
         numBoidsLabel.text = s"Num. Boids: ${numBoidsField.text}"
         framerateLabel.text = "Framerate: 0"
-        given random: Random = Random()
-        boids =
-          for i <- 1 to numBoidsField.text.toInt
-          yield BoidState(
-            Vector2d(random.nextInt(preferredSize.width), random.nextInt(preferredSize.height)),
-            Vector2d(random.nextInt(3), random.nextInt(3))
-          )
-        render(boids)
+        generateBoids(numBoidsField.text.toInt,
+                       separationSlider.value / 10.0,
+                       alignmentSlider.value / 10.0,
+                       cohesionSlider.value / 10.0)
         println(s"Generate clicked with ${numBoidsField.text} boids")
 
       case ButtonClicked(`startButton`) =>
