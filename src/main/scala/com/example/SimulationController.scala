@@ -23,21 +23,28 @@ object SimulationController:
     }
 
   private def controllerLogic(): Behavior[Command | Receptionist.Listing] = {
-    Behaviors.receiveMessage { case GenerateBoids(count) =>
-      // Genera `count` attori Ant con posizioni casuali
-      val width = BoidsRender.width
-      val height = BoidsRender.height
+    Behaviors.receiveMessage { 
+      case GenerateBoids(count) =>
+        // Genera `count` attori Ant con posizioni casuali
+        val width = BoidsRender.width
+        val height = BoidsRender.height
 
-      given random: Random = Random()
+        given random: Random = Random()
 
-      (0 until count).foreach { _ =>
-        val pos = Vector2d(random.nextInt(BoidsRender.width), random.nextInt(BoidsRender.height))
-        val vel = Vector2d(random.nextInt(3), random.nextInt(3))
-        ctx.spawnAnonymous(Boid(BoidState(pos, vel), period))
+        (0 until count).foreach { _ =>
+          val pos = Vector2d(random.nextInt(BoidsRender.width), random.nextInt(BoidsRender.height))
+          val vel = Vector2d(random.nextInt(3), random.nextInt(3))
+          ctx.spawnAnonymous(Boid(BoidState(pos, vel), period))
+        }
+        controllerLogic()
+          
+      //case ??? => ???
+          
       }
       Behaviors.same
     }
   }
+  
   @main def runControllerApp(): Unit =
     // Creo il sistema tipizzato con protocollo Command
-    ActorSystem(BasicExample(period = 60.millis), "AntsSystem")
+    ActorSystem(SimulationController(period = 60.millis), "AntsSystem")
