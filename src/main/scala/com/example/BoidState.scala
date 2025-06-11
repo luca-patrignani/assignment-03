@@ -1,13 +1,16 @@
 package com.example
 
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, Scheduler}
 import akka.actor.typed.receptionist.Receptionist
+import akka.actor.typed.receptionist.Receptionist.Find
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.AskPattern.Askable
+import akka.util.Timeout
 import com.example.BoidsRender.RenderMessage
 
 import scala.concurrent.duration.DurationInt
 import java.lang.Math.clamp
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Random
 
@@ -90,7 +93,7 @@ object Boid {
 
   case class UpdateWeights(separation: Double, cohesion: Double, alignment: Double) extends BoidCommand
   
-  case class UpdatePos() extends BoidCommand
+  case class Tick() extends BoidCommand
 
   case class RequestInfo(replyTo: ActorRef[RenderMessage.RenderBoid]) extends BoidCommand
 
@@ -101,7 +104,7 @@ object Boid {
   val Service: akka.actor.typed.receptionist.ServiceKey[BoidCommand] =
     akka.actor.typed.receptionist.ServiceKey[BoidCommand]("BoidService")
 
-  val period: FiniteDuration = 60.millis
+  val period: FiniteDuration = 5.millis
 
   def apply(
       state: BoidState,
@@ -112,7 +115,7 @@ object Boid {
     Behaviors.setup[BoidCommand] { ctx =>
       ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
       Behaviors.withTimers { timers =>
-        timers.startTimerAtFixedRate(state, period)
+        timers.startTimerAtFixedRate(Tick(), period)
         receivingBehaviour(
           ctx,
           state,
@@ -130,32 +133,48 @@ object Boid {
                           alignmentWeight: Double,
                           cohesionWeight: Double,
                         ): Behavior[BoidCommand] = {
-    Behaviors.receiveMessage[BoidCommand] {
-      case UpdatePos() =>
-        ctx.log.info(s"Updating position for boid at ${state.position}")
-        val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5)
-        val listingResponseAdapter = ctx.messageAdapter[Receptionist.Listing](MyListing.apply)
-        val otherBoids = ctx.system.receptionist ! Receptionist.Find(Boid.Service, listingResponseAdapter)
-        val updatedState = ???
-        receivingBehaviour(
-          ctx,
-          updatedState,
-          separationWeight,
-          alignmentWeight,
-          cohesionWeight
-        )
-
-      case MyListing(listing) =>
-        val adapter = ctx.messageAdapter[RenderMessage.RenderBoid](_.boidState)
-        listing.serviceInstances(Boid.Service).foreach(_ ! RequestInfo(adapter))
+    Behaviors.receiveMessagePartial[BoidCommand] {
+      case Tick() =>
+        given ExecutionContext =
+          ctx.system.dispatchers.lookup(DispatcherSelector.fromConfig("my-blocking-dispatcher"))
+        given Timeout = 1.hour
+        given Scheduler = ctx.system.scheduler
+        ctx.pipeToSelf(ctx.system.receptionist.ask(replyTo => Find(Boid.Service, replyTo))
+            .flatMap {
+            case Boid.Service.Listing(allBoids) =>
+              Future.sequence(allBoids
+                .filter(_ != ctx.self)
+                .map(_.ask(replyTo => RequestInfo(replyTo)))
+              ).map(
+                _.map {
+                  case RenderMessage.RenderBoid(boidState) => boidState
+                }
+              )
+            }.map(allBoids =>
+              val rules = BoidRules(
+                avoidRadius = 20,
+                perceptionRadius = 100,
+                maxSpeed = 5
+              )
+              rules.update(state)(allBoids.toSeq)
+            ).andThen {
+              case scala.util.Success(newState) =>
+                newState
+              case scala.util.Failure(exception) =>
+                ???
+            }
+        )(_.getOrElse(???))
         Behaviors.same
 
       case BoidState(position, velocity) =>
         ctx.log.info(s"Boid at position $position with velocity $velocity")
-        // val rules = BoidRules(avoidRadius = 20, perceptionRadius = 100, maxSpeed = 5)
-        // val updatedState = rules.update(state)(ctx.system.receptionist ! Receptionist.Find(Boid.Service))
-        // ctx.self ! updatedState
-        Behaviors.same
+        receivingBehaviour(
+          ctx,
+          BoidState(position, velocity),
+          separationWeight,
+          alignmentWeight,
+          cohesionWeight
+        )
 
       case Stop =>
         ctx.log.info(s"Stopping boid at ${state.position}")

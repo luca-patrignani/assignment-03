@@ -22,7 +22,7 @@ object BoidsRender:
     case NewBoid(boid: Behavior[Boid.BoidCommand])
 
   val Service: ServiceKey[RenderMessage] = ServiceKey[RenderMessage]("RenderService")
-  val frameRate: Double = 60
+  val frameRate: Double = 20
   def apply(): Behavior[RenderMessage] =
     Behaviors.setup { ctx =>
       val frontendGui = BoidsSimulationGUI(generateBoids(ctx, _, _, _, _)) // init the gui
@@ -40,7 +40,9 @@ object BoidsRender:
 
           case RenderMessage.RenderBoid(boidState) =>
             toRender = toRender :+ boidState.position
-            frontendGui.render(toRender)
+            if toRender.size == boids.size then
+              frontendGui.render(toRender)
+              toRender = Seq.empty // reset after rendering
             Behaviors.same
 
           case NewBoid(boid) =>
