@@ -1,15 +1,18 @@
 package com.example
 
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
+import com.example.BoidsRender.RenderMessage
+
 import java.awt.geom.Ellipse2D
 import scala.swing.*
 import scala.swing.event.*
 import java.awt.{Color, Dimension, Graphics2D}
 import javax.swing.BorderFactory
 import scala.util.Random
-import javax.swing.{Timer => SwingTimer}
+import javax.swing.Timer as SwingTimer
 
-
-case class BoidsSimulationGUI(generateBoids: (Int, Double, Double, Double) => Unit) extends SimpleSwingApplication:
+case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage]) extends SimpleSwingApplication:
   var boids: Seq[Vector2d] = Seq.empty
   val space = Vector2d(1000, 500)
   val environmentCanvas = new Environment
@@ -91,32 +94,50 @@ case class BoidsSimulationGUI(generateBoids: (Int, Double, Double, Double) => Un
         startButton.enabled = true
         numBoidsLabel.text = s"Num. Boids: ${numBoidsField.text}"
         framerateLabel.text = "Framerate: 0"
-        generateBoids(numBoidsField.text.toInt,
-                       separationSlider.value / 10.0,
-                       alignmentSlider.value / 10.0,
-                       cohesionSlider.value / 10.0)
+        renderRef ! BoidsRender.RenderMessage.GenerateBoids(
+          numBoidsField.text.toInt,
+          separationSlider.value / 10.0,
+          alignmentSlider.value / 10.0,
+          cohesionSlider.value / 10.0
+        )
         println(s"Generate clicked with ${numBoidsField.text} boids")
 
       case ButtonClicked(`startButton`) =>
         startButton.enabled = false
         generateButton.enabled = false
         stopButton.enabled = true
-        // timer.start() IDK how to implement this actor based TODO
+        renderRef ! BoidsRender.RenderMessage.StartSimulation
         println("Simulation started")
 
       case ButtonClicked(`stopButton`) =>
         stopButton.enabled = false
         generateButton.enabled = true
         startButton.enabled = true
-        // timer.stop() same as below TODO
+        renderRef ! BoidsRender.RenderMessage.StopSimulation
         println("Simulation stopped")
 
       case ValueChanged(`separationSlider`) =>
+        renderRef ! BoidsRender.RenderMessage.UpdateParameter(
+          separationSlider.value.toDouble,
+          alignmentSlider.value.toDouble,
+          cohesionSlider.value.toDouble
+        )
         println(f"Separation: ${separationSlider.value / 10.0}%.1f")
 
       case ValueChanged(`alignmentSlider`) =>
+        renderRef ! BoidsRender.RenderMessage.UpdateParameter(
+          separationSlider.value.toDouble,
+          alignmentSlider.value.toDouble,
+          cohesionSlider.value.toDouble
+        )
         println(f"Alignment: ${alignmentSlider.value / 10.0}%.1f")
 
       case ValueChanged(`cohesionSlider`) =>
+        renderRef ! BoidsRender.RenderMessage.UpdateParameter(
+          separationSlider.value.toDouble,
+          alignmentSlider.value.toDouble,
+          cohesionSlider.value.toDouble
+        )
         println(f"Cohesion: ${cohesionSlider.value / 10.0}%.1f")
+
     }

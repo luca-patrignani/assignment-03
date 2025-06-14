@@ -75,12 +75,12 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
       .filter(_ != boid)
       .filter(_.position.distance(boid.position) < perceptionRadius)
 
-  def update(boid: BoidState)(allBoids: Seq[BoidState]): BoidState =
+  def update(boid: BoidState, sepW: Double, aliW: Double, cohW: Double)(allBoids: Seq[BoidState]): BoidState =
     val nearby = nearbyBoids(boid, allBoids)
     val separationForce = separation(boid.position, nearby.map(_.position))
     val alignmentForce = alignment(boid.velocity, nearby.map(_.velocity))
     val cohesionForce = cohesion(boid.position, nearby.map(_.position))
-    var newVelocity = boid.velocity + separationForce + alignmentForce + cohesionForce
+    var newVelocity = boid.velocity + separationForce * sepW + alignmentForce * aliW + cohesionForce * cohW
     if newVelocity.magnitude > maxSpeed then newVelocity = newVelocity.normalized * maxSpeed
     val newPosition = boid.position + newVelocity
     BoidState(newPosition.wrapped(Vector2d(500, 500)), newVelocity)
@@ -92,72 +92,109 @@ object Boid {
   case object Stop extends BoidCommand
 
   case class UpdateWeights(separation: Double, cohesion: Double, alignment: Double) extends BoidCommand
-  
+
   case class Tick() extends BoidCommand
 
   case class RequestInfo(replyTo: ActorRef[RenderMessage.RenderBoid]) extends BoidCommand
 
   case class MyListing(listing: Receptionist.Listing) extends BoidCommand
 
-  case object Resume extends BoidCommand
+  case object ResumeSimulation extends BoidCommand
+
+  case object StopSimulation extends BoidCommand
 
   val Service: akka.actor.typed.receptionist.ServiceKey[BoidCommand] =
     akka.actor.typed.receptionist.ServiceKey[BoidCommand]("BoidService")
 
-  val period: FiniteDuration = 5.millis
+  val period: FiniteDuration = 20.millis
 
   def apply(
       state: BoidState,
       separationWeight: Double,
       alignmentWeight: Double,
-      cohesionWeight: Double,
+      cohesionWeight: Double
   ): Behavior[BoidCommand] =
     Behaviors.setup[BoidCommand] { ctx =>
       ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
       Behaviors.withTimers { timers =>
         timers.startTimerAtFixedRate(Tick(), period)
-        receivingBehaviour(
-          ctx,
-          state,
-          separationWeight,
-          alignmentWeight,
-          cohesionWeight
-        )
+        inactive(ctx, state, separationWeight, alignmentWeight, cohesionWeight)
+
       }
     }
 
-  def receivingBehaviour(
-                          ctx: ActorContext[BoidCommand],
-                          state: BoidState,
-                          separationWeight: Double,
-                          alignmentWeight: Double,
-                          cohesionWeight: Double,
-                        ): Behavior[BoidCommand] = {
-    Behaviors.receiveMessagePartial[BoidCommand] {
+  private def inactive(
+      ctx: ActorContext[BoidCommand],
+      state: BoidState,
+      sep: Double,
+      ali: Double,
+      coh: Double
+  ): Behavior[BoidCommand] =
+    Behaviors.receiveMessage {
+      case ResumeSimulation =>
+        active(ctx, state, sep, ali, coh)
+
+      case RequestInfo(replyTo) =>
+        replyTo ! RenderMessage.RenderBoid(state)
+        Behaviors.same
+
+      case BoidState(position, velocity) =>
+        // ctx.log.info(s"Boid at position $position with velocity $velocity")
+        inactive(
+          ctx,
+          BoidState(position, velocity),
+          sep,
+          ali,
+          coh
+        )
+
+      case UpdateWeights(ns, na, nc) =>
+        inactive(ctx, state, ns, na, nc)
+
+      case Stop =>
+        Behaviors.stopped
+
+      case _ => Behaviors.same
+    }
+
+  private def active(
+      ctx: ActorContext[BoidCommand],
+      state: BoidState,
+      sep: Double,
+      ali: Double,
+      coh: Double
+  ): Behavior[BoidCommand] =
+    Behaviors.receiveMessagePartial {
       case Tick() =>
         given ExecutionContext =
           ctx.system.dispatchers.lookup(DispatcherSelector.fromConfig("my-blocking-dispatcher"))
         given Timeout = 1.hour
         given Scheduler = ctx.system.scheduler
-        ctx.pipeToSelf(ctx.system.receptionist.ask(replyTo => Find(Boid.Service, replyTo))
-            .flatMap {
-            case Boid.Service.Listing(allBoids) =>
-              Future.sequence(allBoids
-                .filter(_ != ctx.self)
-                .map(_.ask(replyTo => RequestInfo(replyTo)))
-              ).map(
-                _.map {
-                  case RenderMessage.RenderBoid(boidState) => boidState
-                }
-              )
-            }.map(allBoids =>
+        ctx.pipeToSelf(
+          ctx.system.receptionist
+            .ask(replyTo => Find(Boid.Service, replyTo))
+            .flatMap { case Boid.Service.Listing(allBoids) =>
+              Future
+                .sequence(
+                  allBoids
+                    .filter(_ != ctx.self)
+                    .map(_.ask(replyTo => RequestInfo(replyTo)))
+                )
+                .map(
+                  _.map { case RenderMessage.RenderBoid(boidState) =>
+                    boidState
+                  }
+                )
+            }
+            .map(allBoids =>
               val rules = BoidRules(
                 avoidRadius = 20,
                 perceptionRadius = 100,
                 maxSpeed = 5
               )
-              rules.update(state)(allBoids.toSeq)
-            ).andThen {
+              rules.update(state, sep, ali, coh)(allBoids.toSeq)
+            )
+            .andThen {
               case scala.util.Success(newState) =>
                 newState
               case scala.util.Failure(exception) =>
@@ -166,38 +203,32 @@ object Boid {
         )(_.getOrElse(???))
         Behaviors.same
 
-      case BoidState(position, velocity) =>
-        ctx.log.info(s"Boid at position $position with velocity $velocity")
-        receivingBehaviour(
-          ctx,
-          BoidState(position, velocity),
-          separationWeight,
-          alignmentWeight,
-          cohesionWeight
-        )
-
-      case Stop =>
-        ctx.log.info(s"Stopping boid at ${state.position}")
-        Behaviors.stopped
-
-      case UpdateWeights(separation, alignment, cohesion) =>
-        ctx.log.info(s"Updating weights: separation=$separation, alignment=$alignment, cohesion=$cohesion")
-        receivingBehaviour(
-          ctx,
-          state,
-          separationWeight = separation,
-          alignmentWeight = alignment,
-          cohesionWeight = cohesion
-        )
+      case StopSimulation =>
+        inactive(ctx, state, sep, ali, coh)
 
       case RequestInfo(replyTo) =>
         replyTo ! RenderMessage.RenderBoid(state)
         Behaviors.same
 
-      case Resume =>
+      case BoidState(position, velocity) =>
+        // ctx.log.info(s"Boid at position $position with velocity $velocity")
+        active(
+          ctx,
+          BoidState(position, velocity),
+          sep,
+          ali,
+          coh
+        )
+
+      case UpdateWeights(ns, na, nc) =>
+        ctx.log.info(s"Update weights")
+        active(ctx, state, ns, na, nc)
+
+      case Stop =>
+        Behaviors.stopped
+
+      case _ =>
         Behaviors.same
     }
-  }
-
 
 }
