@@ -12,13 +12,12 @@ import javax.swing.BorderFactory
 import scala.util.Random
 import javax.swing.Timer as SwingTimer
 
-case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage]) extends SimpleSwingApplication:
+case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], width: Int, height: Int) extends SimpleSwingApplication:
   var boids: Seq[Vector2d] = Seq.empty
-  val space = Vector2d(1000, 500)
   val environmentCanvas = new Environment
 
   class Environment() extends Panel:
-    preferredSize = Dimension(space.x.toInt, space.y.toInt)
+    preferredSize = Dimension(width, height)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
       g.clearRect(0, 0, preferredSize.width + 10, preferredSize.height + 10)
@@ -34,7 +33,7 @@ case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage]) ex
 
   def top: Frame = new MainFrame:
     title = "Boids Simulation"
-    preferredSize = Dimension(space.x.toInt, space.y.toInt + 200)
+    preferredSize = Dimension(width, height)
 
     val numBoidsField = new TextField("0", 5)
     val generateButton = new Button("Generate")

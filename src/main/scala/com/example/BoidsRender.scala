@@ -3,6 +3,8 @@ package com.example
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.*
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import scala.concurrent.duration._
+
 import com.example.Boid.{BoidCommand, Stop, UpdateWeights}
 import com.example.BoidsRender.RenderMessage.{
   Flush,
@@ -19,8 +21,8 @@ import scala.language.postfixOps
 
 object BoidsRender:
   // Constants
-  val width = 800
-  val height = 600
+  val width = 1000
+  val height = 500
 
   enum RenderMessage:
     case Flush
@@ -37,7 +39,7 @@ object BoidsRender:
 
   def apply(): Behavior[RenderMessage] =
     Behaviors.setup { ctx =>
-      val frontendGui = BoidsSimulationGUI(ctx.self) // init the gui
+      val frontendGui = BoidsSimulationGUI(ctx.self, width, height) // init the gui
       frontendGui.startup(Array.empty)
 
       Behaviors.withTimers { timers =>
@@ -45,12 +47,18 @@ object BoidsRender:
         var toRender = Seq.empty[Vector2d]
         var boids: Seq[ActorRef[BoidCommand]] = Seq.empty
 
-        timers.startTimerAtFixedRate(Flush, (1000 / frameRate).toInt milliseconds)
+        ctx.self ! Flush
 
         val listingResponseAdapter = ctx.messageAdapter[Receptionist.Listing](RenderMessage.MyListing.apply)
+
         Behaviors.receiveMessage {
           case Flush =>
+            val start = System.currentTimeMillis()
             boids.foreach(_ ! Boid.RequestInfo(ctx.self))
+            val elapsed = (System.currentTimeMillis() - start).millis
+            val minDelay = 10.millis
+            val delay = (minDelay - elapsed).max(Duration.Zero)
+            ctx.scheduleOnce(delay, ctx.self, Flush)
             Behaviors.same
 
           case RenderMessage.RenderBoid(boidState) =>
@@ -80,6 +88,9 @@ object BoidsRender:
 
           case UpdateParameter(s, a, c) =>
             boids.foreach(_ ! Boid.UpdateWeights(s, a, c))
+            Behaviors.same
+
+          case _ =>
             Behaviors.same
         }
       }

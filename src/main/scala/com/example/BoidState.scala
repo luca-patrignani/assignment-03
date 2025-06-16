@@ -6,9 +6,10 @@ import akka.actor.typed.receptionist.Receptionist.Find
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.util.Timeout
-import com.example.BoidsRender.RenderMessage
+import com.example.BoidsRender.{RenderMessage, height, width}
 
 import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration._
 import java.lang.Math.clamp
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
@@ -83,7 +84,7 @@ case class BoidRules(avoidRadius: Double, perceptionRadius: Double, maxSpeed: Do
     var newVelocity = boid.velocity + separationForce * sepW + alignmentForce * aliW + cohesionForce * cohW
     if newVelocity.magnitude > maxSpeed then newVelocity = newVelocity.normalized * maxSpeed
     val newPosition = boid.position + newVelocity
-    BoidState(newPosition.wrapped(Vector2d(500, 500)), newVelocity)
+    BoidState(newPosition.wrapped(Vector2d(width, height)), newVelocity)
 }
 
 object Boid {
@@ -116,11 +117,9 @@ object Boid {
   ): Behavior[BoidCommand] =
     Behaviors.setup[BoidCommand] { ctx =>
       ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
-      Behaviors.withTimers { timers =>
-        timers.startTimerAtFixedRate(Tick(), period)
-        inactive(ctx, state, separationWeight, alignmentWeight, cohesionWeight)
+      ctx.self ! Tick()
+      inactive(ctx, state, separationWeight, alignmentWeight, cohesionWeight)
 
-      }
     }
 
   private def inactive(
@@ -132,6 +131,7 @@ object Boid {
   ): Behavior[BoidCommand] =
     Behaviors.receiveMessage {
       case ResumeSimulation =>
+        ctx.self ! Tick()
         active(ctx, state, sep, ali, coh)
 
       case RequestInfo(replyTo) =>
@@ -166,9 +166,11 @@ object Boid {
   ): Behavior[BoidCommand] =
     Behaviors.receiveMessagePartial {
       case Tick() =>
+        val startTime = System.currentTimeMillis()
+
         given ExecutionContext =
           ctx.system.dispatchers.lookup(DispatcherSelector.fromConfig("my-blocking-dispatcher"))
-        given Timeout = 1.hour
+        given Timeout = 50.millis
         given Scheduler = ctx.system.scheduler
         ctx.pipeToSelf(
           ctx.system.receptionist
@@ -196,11 +198,16 @@ object Boid {
             )
             .andThen {
               case scala.util.Success(newState) =>
+                val elapsed = (System.currentTimeMillis() - startTime).millis
+                val minDelay = 5.millis
+                val delay = (minDelay - elapsed).max(Duration.Zero)
+                ctx.scheduleOnce(delay, ctx.self, Tick())
                 newState
               case scala.util.Failure(exception) =>
-                ???
+                ctx.scheduleOnce(50.millis, ctx.self, Tick())
+                state
             }
-        )(_.getOrElse(???))
+        )(_.getOrElse(BoidState(state.position+state.velocity,state.velocity)))
         Behaviors.same
 
       case StopSimulation =>
