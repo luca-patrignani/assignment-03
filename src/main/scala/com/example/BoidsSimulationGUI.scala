@@ -20,7 +20,7 @@ case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], wi
     preferredSize = Dimension(width, height)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
-      g.clearRect(0, 0, preferredSize.width + 10, preferredSize.height + 10)
+      g.clearRect(0, 0, preferredSize.width, preferredSize.height)
       g.setColor(Color.BLACK)
       boids.foreach { p =>
         val bShape = new Ellipse2D.Double(p.x - 2, p.y - 2, 2 * 2, 2 * 2)
@@ -34,7 +34,7 @@ case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], wi
 
   def top: Frame = new MainFrame:
     title = "Boids Simulation"
-    preferredSize = Dimension(width, height)
+    preferredSize = Dimension(width, height + 200)
 
     val numBoidsLabel = new Label("Num. Boids: 0")
     val numBoidsField = new TextField("0", 5)
