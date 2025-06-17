@@ -1,19 +1,15 @@
 package com.example
 
-import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, Scheduler}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.receptionist.Receptionist.Find
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.AskPattern.Askable
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, Scheduler}
 import akka.util.Timeout
 import com.example.BoidsRender.{RenderMessage, height, width}
 
-import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.*
-import java.lang.Math.clamp
 import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration.FiniteDuration
-import scala.util.Random
 
 case class Vector2d(x: Double, y: Double) {
 
@@ -98,6 +94,8 @@ object Boid {
 
   case class RequestInfo(replyTo: ActorRef[RenderMessage.RenderBoid]) extends BoidCommand
 
+  private case class RequestInternalState(replyTo: ActorRef[BoidState]) extends BoidCommand
+
   case class MyListing(listing: Receptionist.Listing) extends BoidCommand
 
   case object ResumeSimulation extends BoidCommand
@@ -167,7 +165,6 @@ object Boid {
     Behaviors.receiveMessagePartial {
       case Tick() =>
         val startTime = System.currentTimeMillis()
-
         given ExecutionContext =
           ctx.system.dispatchers.lookup(DispatcherSelector.fromConfig("my-blocking-dispatcher"))
         given Timeout = 1.hour
@@ -180,13 +177,9 @@ object Boid {
                 .sequence(
                   allBoids
                     .filter(_ != ctx.self)
-                    .map(_.ask(replyTo => RequestInfo(replyTo)))
+                    .map(_.ask(replyTo => RequestInternalState(replyTo)))
                 )
-                .map(
-                  _.map { case RenderMessage.RenderBoid(boidState) =>
-                    boidState
-                  }
-                )
+                .map(_.collect { case b: BoidState => b })
             }
             .map(allBoids =>
               val rules = BoidRules(
@@ -212,6 +205,10 @@ object Boid {
       case StopSimulation =>
         inactive(ctx, state, sep, ali, coh)
 
+      case RequestInternalState(replyTo) =>
+        replyTo ! state
+        Behaviors.same
+
       case RequestInfo(replyTo) =>
         replyTo ! RenderMessage.RenderBoid(state)
         Behaviors.same
@@ -219,7 +216,7 @@ object Boid {
       case BoidState(position, velocity) =>
         // ctx.log.info(s"Boid at position $position with velocity $velocity")
         active(
-          ctx,ò
+          ctx,
           BoidState(position, velocity),
           sep,
           ali,
@@ -227,7 +224,7 @@ object Boid {
         )
 
       case UpdateWeights(ns, na, nc) =>
-        ctx.log.info(s"Update weights")
+        // ctx.log.info(s"Update weights to sep $ns, ali $na, coh $nc")
         active(ctx, state, ns, na, nc)
 
       case Stop =>
