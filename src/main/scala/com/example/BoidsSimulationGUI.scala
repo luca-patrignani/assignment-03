@@ -1,47 +1,46 @@
 package com.example
 
 import akka.actor.typed.ActorRef
-import akka.actor.typed.scaladsl.ActorContext
 import com.example.BoidsRender.RenderMessage
 
 import java.awt.geom.Ellipse2D
-import scala.swing.*
-import scala.swing.event.*
 import java.awt.{Color, Dimension, Graphics2D}
 import javax.swing.BorderFactory
-import scala.util.Random
-import javax.swing.Timer as SwingTimer
+import scala.swing.*
+import scala.swing.event.*
 
-case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], width: Int, height: Int) extends SimpleSwingApplication:
+case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], width: Int, height: Int)
+    extends SimpleSwingApplication:
   var boids: Seq[Vector2d] = Seq.empty
-  val environmentCanvas = new Environment
+  private val environmentCanvas = new Environment
 
-  class Environment() extends Panel:
+  private val framerateLabel = new Label("Framerate: 0")
+
+  private class Environment() extends Panel:
     preferredSize = Dimension(width, height)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
       g.clearRect(0, 0, preferredSize.width + 10, preferredSize.height + 10)
       g.setColor(Color.BLACK)
       boids.foreach { p =>
-        val boid = new Ellipse2D.Double(p.x - 2, p.y - 2, 2 * 2, 2 * 2)
-        g.draw(boid)
+        val bShape = new Ellipse2D.Double(p.x - 2, p.y - 2, 2 * 2, 2 * 2)
+        g.draw(bShape)
       }
 
-  def render(newBoids: Seq[Vector2d]): Unit =
+  def render(newBoids: Seq[Vector2d], fps: Int): Unit =
     boids = newBoids
+    framerateLabel.text = "Framerate: " + fps.toString
     environmentCanvas.repaint()
 
   def top: Frame = new MainFrame:
     title = "Boids Simulation"
     preferredSize = Dimension(width, height)
 
+    val numBoidsLabel = new Label("Num. Boids: 0")
     val numBoidsField = new TextField("0", 5)
     val generateButton = new Button("Generate")
     val startButton = new Button("Start") { enabled = false }
     val stopButton = new Button("Stop") { enabled = false }
-
-    val numBoidsLabel = new Label("Num. Boids: 0")
-    val framerateLabel = new Label("Framerate: 0")
 
     def createSlider(name: String): (Label, Slider) =
       val label = new Label(name)
@@ -115,28 +114,11 @@ case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], wi
         renderRef ! BoidsRender.RenderMessage.StopSimulation
         println("Simulation stopped")
 
-      case ValueChanged(`separationSlider`) =>
+      case ValueChanged(`separationSlider` | `alignmentSlider` | `cohesionSlider`) =>
         renderRef ! BoidsRender.RenderMessage.UpdateParameter(
-          separationSlider.value.toDouble,
-          alignmentSlider.value.toDouble,
-          cohesionSlider.value.toDouble
+          separationSlider.value.toDouble / 10,
+          alignmentSlider.value.toDouble / 10,
+          cohesionSlider.value.toDouble / 10
         )
-        println(f"Separation: ${separationSlider.value / 10.0}%.1f")
-
-      case ValueChanged(`alignmentSlider`) =>
-        renderRef ! BoidsRender.RenderMessage.UpdateParameter(
-          separationSlider.value.toDouble,
-          alignmentSlider.value.toDouble,
-          cohesionSlider.value.toDouble
-        )
-        println(f"Alignment: ${alignmentSlider.value / 10.0}%.1f")
-
-      case ValueChanged(`cohesionSlider`) =>
-        renderRef ! BoidsRender.RenderMessage.UpdateParameter(
-          separationSlider.value.toDouble,
-          alignmentSlider.value.toDouble,
-          cohesionSlider.value.toDouble
-        )
-        println(f"Cohesion: ${cohesionSlider.value / 10.0}%.1f")
 
     }

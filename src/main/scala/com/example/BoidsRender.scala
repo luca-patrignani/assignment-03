@@ -3,20 +3,10 @@ package com.example
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.*
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import scala.concurrent.duration._
-
 import com.example.Boid.{BoidCommand, Stop, UpdateWeights}
-import com.example.BoidsRender.RenderMessage.{
-  Flush,
-  MyListing,
-  NewBoid,
-  StartSimulation,
-  StopSimulation,
-  UpdateParameter
-}
+import com.example.BoidsRender.RenderMessage.*
 
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.*
 import scala.language.postfixOps
 
 object BoidsRender:
@@ -50,6 +40,7 @@ object BoidsRender:
         ctx.self ! Flush
 
         val listingResponseAdapter = ctx.messageAdapter[Receptionist.Listing](RenderMessage.MyListing.apply)
+        var fps = 0
 
         Behaviors.receiveMessage {
           case Flush =>
@@ -57,14 +48,15 @@ object BoidsRender:
             boids.foreach(_ ! Boid.RequestInfo(ctx.self))
             val elapsed = (System.currentTimeMillis() - start).millis
             val minDelay = 10.millis
-            val delay = (minDelay - elapsed).max(Duration.Zero)
+            val delay = minDelay.max(elapsed)
+            fps = (1000 / delay.toMillis).toInt
             ctx.scheduleOnce(delay, ctx.self, Flush)
             Behaviors.same
 
           case RenderMessage.RenderBoid(boidState) =>
             toRender = toRender :+ boidState.position
             if toRender.size == boids.size then
-              frontendGui.render(toRender)
+              frontendGui.render(toRender, fps)
               toRender = Seq.empty // reset after rendering
             Behaviors.same
 

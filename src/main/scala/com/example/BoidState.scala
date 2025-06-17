@@ -9,7 +9,7 @@ import akka.util.Timeout
 import com.example.BoidsRender.{RenderMessage, height, width}
 
 import scala.concurrent.duration.DurationInt
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import java.lang.Math.clamp
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
@@ -170,7 +170,7 @@ object Boid {
 
         given ExecutionContext =
           ctx.system.dispatchers.lookup(DispatcherSelector.fromConfig("my-blocking-dispatcher"))
-        given Timeout = 50.millis
+        given Timeout = 1.hour
         given Scheduler = ctx.system.scheduler
         ctx.pipeToSelf(
           ctx.system.receptionist
@@ -200,14 +200,13 @@ object Boid {
               case scala.util.Success(newState) =>
                 val elapsed = (System.currentTimeMillis() - startTime).millis
                 val minDelay = 5.millis
-                val delay = (minDelay - elapsed).max(Duration.Zero)
+                val delay = elapsed.max(minDelay)
                 ctx.scheduleOnce(delay, ctx.self, Tick())
                 newState
               case scala.util.Failure(exception) =>
-                ctx.scheduleOnce(50.millis, ctx.self, Tick())
                 state
             }
-        )(_.getOrElse(BoidState(state.position+state.velocity,state.velocity)))
+        )(_.getOrElse(BoidState(state.position + state.velocity, state.velocity)))
         Behaviors.same
 
       case StopSimulation =>
@@ -220,7 +219,7 @@ object Boid {
       case BoidState(position, velocity) =>
         // ctx.log.info(s"Boid at position $position with velocity $velocity")
         active(
-          ctx,
+          ctx,ò
           BoidState(position, velocity),
           sep,
           ali,
