@@ -32,60 +32,59 @@ object BoidsRender:
       val frontendGui = BoidsSimulationGUI(ctx.self, width, height) // init the gui
       frontendGui.startup(Array.empty)
 
-      Behaviors.withTimers { timers =>
-        ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
-        var toRender = Seq.empty[Vector2d]
-        var boids: Seq[ActorRef[BoidCommand]] = Seq.empty
+      ctx.system.receptionist ! Receptionist.Register(Service, ctx.self)
+      var toRender = Seq.empty[Vector2d]
+      var boids: Seq[ActorRef[BoidCommand]] = Seq.empty
 
-        ctx.self ! Flush
+      ctx.self ! Flush
 
-        val listingResponseAdapter = ctx.messageAdapter[Receptionist.Listing](RenderMessage.MyListing.apply)
-        var fps = 0
+      val listingResponseAdapter = ctx.messageAdapter[Receptionist.Listing](RenderMessage.MyListing.apply)
+      var fps = 0
 
-        Behaviors.receiveMessage {
-          case Flush =>
-            val start = System.currentTimeMillis()
-            boids.foreach(_ ! Boid.RequestInfo(ctx.self))
-            val elapsed = (System.currentTimeMillis() - start).millis
-            val minDelay = 10.millis
-            val delay = minDelay.max(elapsed)
-            fps = (1000 / delay.toMillis).toInt
-            ctx.scheduleOnce(delay, ctx.self, Flush)
-            Behaviors.same
+      Behaviors.receiveMessage {
+        case Flush =>
+          val start = System.currentTimeMillis()
+          boids.foreach(_ ! Boid.RequestInfo(ctx.self))
+          val elapsed = (System.currentTimeMillis() - start).millis
+          val minDelay = 20.millis
+          val delay = minDelay.max(elapsed)
+          fps = (1000 / delay.toMillis).toInt
+          ctx.scheduleOnce(delay, ctx.self, Flush)
+          Behaviors.same
 
-          case RenderMessage.RenderBoid(boidState) =>
-            toRender = toRender :+ boidState.position
-            if toRender.size == boids.size then
-              frontendGui.render(toRender, fps)
-              toRender = Seq.empty // reset after rendering
-            Behaviors.same
+        case RenderMessage.RenderBoid(boidState) =>
+          toRender = toRender :+ boidState.position
+          if toRender.size == boids.size then
+            frontendGui.render(toRender, fps)
+            toRender = Seq.empty // reset after rendering
+          Behaviors.same
 
-          case RenderMessage.NewBoid(boidRefs) =>
-            ctx.log.info("New boids created")
-            boids.foreach(_ ! Stop)
-            boids = boidRefs
-            Behaviors.same
+        case RenderMessage.NewBoid(boidRefs) =>
+          ctx.log.info("New boids created")
+          boids.foreach(_ ! Stop)
+          boids = boidRefs
+          Behaviors.same
 
-          case StartSimulation =>
-            boids.foreach(_ ! Boid.ResumeSimulation)
-            Behaviors.same
+        case StartSimulation =>
+          boids.foreach(_ ! Boid.ResumeSimulation)
+          Behaviors.same
 
-          case StopSimulation =>
-            boids.foreach(_ ! Boid.StopSimulation)
-            Behaviors.same
+        case StopSimulation =>
+          boids.foreach(_ ! Boid.StopSimulation)
+          Behaviors.same
 
-          case RenderMessage.GenerateBoids(count, s, a, c) =>
-            generateBoids(ctx, count, s, a, c)
-            Behaviors.same
+        case RenderMessage.GenerateBoids(count, s, a, c) =>
+          generateBoids(ctx, count, s, a, c)
+          Behaviors.same
 
-          case UpdateParameter(s, a, c) =>
-            boids.foreach(_ ! Boid.UpdateWeights(s, a, c))
-            Behaviors.same
+        case UpdateParameter(s, a, c) =>
+          boids.foreach(_ ! Boid.UpdateWeights(s, a, c))
+          Behaviors.same
 
-          case _ =>
-            Behaviors.same
-        }
+        case _ =>
+          Behaviors.same
       }
+
     }
 
   private def generateBoids(ctx: ActorContext[RenderMessage], count: Int, s: Double, a: Double, c: Double): Unit = {

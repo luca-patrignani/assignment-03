@@ -20,7 +20,7 @@ case class BoidsSimulationGUI(renderRef: ActorRef[BoidsRender.RenderMessage], wi
     preferredSize = Dimension(width, height)
     background = Color.white
     override def paintComponent(g: Graphics2D): Unit =
-      g.clearRect(0, 0, preferredSize.width, preferredSize.height)
+      g.clearRect(0, 0, preferredSize.width+3, preferredSize.height+3)
       g.setColor(Color.BLACK)
       boids.foreach { p =>
         val bShape = new Ellipse2D.Double(p.x - 2, p.y - 2, 2 * 2, 2 * 2)
